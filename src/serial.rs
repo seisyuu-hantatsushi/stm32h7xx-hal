@@ -998,7 +998,8 @@ macro_rules! usart {
                     } else if isr.rxne().bit_is_set() {
                         // NOTE(read_volatile) see `write_volatile` below
                         return Ok(unsafe {
-                            ptr::read_volatile(&(*$USARTX::ptr()).rdr() as *const _ as *const _)
+                            //ptr::read_volatile(&(*$USARTX::ptr()).rdr() as *const _ as *const _)
+                            (*$USARTX::ptr()).rdr().read().bits() as u8
                         });
                     } else {
                         nb::Error::WouldBlock
@@ -1115,9 +1116,10 @@ macro_rules! usart {
                         // NOTE(write_volatile) 8-bit write that's not
                         // possible through the svd2rust API
                         unsafe {
-                            let tdr = &(*$USARTX::ptr()).tdr() as *const _ as *const UnsafeCell<u8>;
-
-                            ptr::write_volatile(UnsafeCell::raw_get(tdr), byte)
+                            //let tdr = &(*$USARTX::ptr()).tdr() as *const _ as *const UnsafeCell<u8>;
+                            //
+                            //ptr::write_volatile(UnsafeCell::raw_get(tdr), byte)
+                            (*$USARTX::ptr()).tdr().write(|w| w.bits(byte as u32));
                         }
                         Ok(())
                     } else {
