@@ -37,8 +37,8 @@ fn main() -> ! {
     utilities::logger::init();
     info!("stm32h7xx-hal example - EXTI Interrupt");
 
-    let mut cp = cortex_m::Peripherals::take().unwrap();
-    let dp = pac::Peripherals::take().unwrap();
+    let mut cp = unsafe { cortex_m::Peripherals::steal() };
+    let dp = unsafe { pac::Peripherals::steal() };
 
     info!("Setup PWR...");
     let pwr = dp.PWR.constrain();

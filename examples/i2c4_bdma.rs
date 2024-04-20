@@ -32,12 +32,12 @@ static mut BUFFER: MaybeUninit<[u8; 10]> = MaybeUninit::uninit();
 #[entry]
 fn main() -> ! {
     utilities::logger::init();
-    let cp = cortex_m::Peripherals::take().unwrap();
-    let dp = pac::Peripherals::take().expect("Cannot take peripherals");
+    let cp = unsafe { cortex_m::Peripherals::steal() };
+    let dp = unsafe { pac::Peripherals::steal() };
 
     // Run D3 / SRD domain
     #[cfg(not(feature = "rm0455"))]
-    dp.PWR.cpucr.modify(|_, w| w.run_d3().set_bit());
+    dp.PWR.cpucr().modify(|_, w| w.run_d3().set_bit());
     #[cfg(feature = "rm0455")]
     dp.PWR.cpucr.modify(|_, w| w.run_srd().set_bit());
 

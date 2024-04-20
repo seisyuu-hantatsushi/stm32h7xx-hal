@@ -15,7 +15,7 @@ use cortex_m_rt::entry;
 use hal::device;
 use hal::dma;
 use hal::rcc::rec::Sai1ClkSel;
-use hal::sai::{self, I2sUsers, SaiChannel, SaiI2sExt};
+use hal::sai::{self, I2sUsers, SaiChannel};
 use hal::stm32;
 use hal::{pac, prelude::*};
 use stm32h7xx_hal as hal;
@@ -67,7 +67,7 @@ fn main() -> ! {
 
     // - initialize power & clocks ----------------------------------------
 
-    let dp = hal::pac::Peripherals::take().unwrap();
+    let dp = unsafe { hal::pac::Peripherals::steal() };
     let pwr = dp.PWR.constrain();
     let vos = pwr.freeze();
     let ccdr = dp
@@ -191,7 +191,7 @@ fn main() -> ! {
 
         // wait until sai1's fifo starts to receive data
         info!("sai1 fifo waiting to receive data");
-        while sai1_rb.cha().sr.read().flvl().is_empty() {}
+        while sai1_rb.cha().sr().read().flvl().is_empty() {}
         info!("audio started");
 
         sai1.enable();

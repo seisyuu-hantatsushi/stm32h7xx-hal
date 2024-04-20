@@ -29,7 +29,7 @@ static mut SOURCE_BUFFER: MaybeUninit<[u32; 200]> = MaybeUninit::uninit();
 #[entry]
 fn main() -> ! {
     utilities::logger::init();
-    let dp = pac::Peripherals::take().unwrap();
+    let dp = unsafe { pac::Peripherals::steal() };
 
     // Constrain and Freeze power
     info!("Setup PWR...                  ");

@@ -13,7 +13,7 @@ use stm32h7xx_hal::{pac, prelude::*};
 #[entry]
 fn main() -> ! {
     utilities::logger::init();
-    let dp = pac::Peripherals::take().unwrap();
+    let dp = unsafe { pac::Peripherals::steal() };
 
     // Constrain and Freeze power
     info!("Setup PWR...                  ");

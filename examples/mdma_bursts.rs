@@ -37,7 +37,7 @@ static mut TARGET_BUFFER: MaybeUninit<[u32; 200]> = MaybeUninit::uninit();
 fn main() -> ! {
     utilities::logger::init();
     let cp = unsafe { cortex_m::Peripherals::steal() };
-    let dp = pac::Peripherals::take().unwrap();
+    let dp = unsafe { pac::Peripherals::steal() };
 
     // Constrain and Freeze power
     info!("Setup PWR...                  ");

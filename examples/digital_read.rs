@@ -15,8 +15,8 @@ fn main() -> ! {
     utilities::logger::init();
     info!("stm32h7xx-hal example - digitalRead");
 
-    let _cp = cortex_m::Peripherals::take().unwrap();
-    let dp = pac::Peripherals::take().unwrap();
+    let _cp = unsafe { cortex_m::Peripherals::steal() };
+    let dp = unsafe { pac::Peripherals::steal() };
 
     info!("Setup PWR...                  ");
     let pwr = dp.PWR.constrain();

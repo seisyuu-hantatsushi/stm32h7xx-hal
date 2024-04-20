@@ -39,7 +39,7 @@ static mut LONG_BUFFER: MaybeUninit<[u32; 0x8000]> = MaybeUninit::uninit();
 #[entry]
 fn main() -> ! {
     utilities::logger::init();
-    let dp = pac::Peripherals::take().unwrap();
+    let dp = unsafe { pac::Peripherals::steal() };
 
     // Constrain and Freeze power
     info!("Setup PWR...                  ");
@@ -128,11 +128,11 @@ fn main() -> ! {
 
         // Enable the SPI by setting the SPE bit
         spi.inner_mut()
-            .cr1
+            .cr1()
             .write(|w| w.ssi().slave_not_selected().spe().enabled());
 
         // write CSTART to start a transaction in master mode
-        spi.inner_mut().cr1.modify(|_, w| w.cstart().started());
+        spi.inner_mut().cr1().modify(|_, w| w.cstart().started());
     });
 
     // Wait for transfer to complete
@@ -168,7 +168,7 @@ fn main() -> ! {
     transfer.pause(|spi| {
         // At this point, the DMA transfer is done, but the data is still in the
         // SPI output FIFO. Wait for it to complete
-        while spi.inner().sr.read().txc().bit_is_clear() {}
+        while spi.inner().sr().read().txc().bit_is_clear() {}
     });
 
     info!("Chunked transfer complete!");

@@ -60,7 +60,7 @@ use log::info;
 #[entry]
 fn main() -> ! {
     utilities::logger::init();
-    let dp = pac::Peripherals::take().expect("Cannot take peripherals");
+    let dp = unsafe { pac::Peripherals::steal() };
 
     // Constrain and Freeze power
     info!("Setup PWR...                  ");

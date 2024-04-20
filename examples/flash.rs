@@ -10,8 +10,6 @@
 
 use cortex_m_rt::entry;
 use stm32h7xx_hal::{pac, prelude::*};
-
-// traits for read, write and erase methods
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 
 #[macro_use]
@@ -21,7 +19,7 @@ use log::info;
 #[entry]
 fn main() -> ! {
     utilities::logger::init();
-    let dp = pac::Peripherals::take().unwrap();
+    let dp = unsafe { pac::Peripherals::steal() };
 
     // Constrain and Freeze power
     info!("Setup PWR...                  ");

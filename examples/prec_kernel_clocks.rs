@@ -19,7 +19,7 @@ fn enable_fdcan(rec: rec::Fdcan) {
 #[entry]
 fn main() -> ! {
     utilities::logger::init();
-    let dp = pac::Peripherals::take().unwrap();
+    let dp = unsafe { pac::Peripherals::steal() };
 
     // Constrain and Freeze power
     let pwr = dp.PWR.constrain();
