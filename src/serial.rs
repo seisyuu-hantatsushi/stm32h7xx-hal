@@ -10,7 +10,6 @@
 use core::cell::UnsafeCell;
 use core::fmt;
 use core::marker::PhantomData;
-use core::ptr;
 
 use embedded_hal::blocking::serial as serial_block;
 use embedded_hal::prelude::*;
