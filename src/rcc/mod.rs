@@ -144,15 +144,15 @@
 
 use crate::pwr::PowerConfiguration;
 use crate::pwr::VoltageScale as Voltage;
-use crate::stm32::rcc::cfgr::{SW, TIMPRE};
+use crate::stm32::rcc::cfgr::{SW, SWS, TIMPRE};
 use crate::stm32::rcc::pllckselr::PLLSRC;
 use crate::stm32::{RCC, SYSCFG};
 use crate::time::Hertz;
 
 #[cfg(feature = "rm0455")]
-use crate::stm32::rcc::cdcfgr1::HPRE;
+use crate::stm32::rcc::cdcfgr1::{HPRE,D1CPRE,D1PPRE};
 #[cfg(not(feature = "rm0455"))]
-use crate::stm32::rcc::d1cfgr::HPRE;
+use crate::stm32::rcc::d1cfgr::{HPRE,D1CPRE,D1PPRE};
 #[cfg(feature = "log")]
 use log::debug;
 
@@ -160,6 +160,9 @@ use log::debug;
 use crate::stm32::rcc::cdccipr::CKPERSEL;
 #[cfg(not(feature = "rm0455"))]
 use crate::stm32::rcc::d1ccipr::CKPERSEL;
+
+use crate::stm32::rcc::d2cfgr::{D2PPRE1, D2PPRE2};
+use crate::stm32::rcc::d3cfgr::D3PPRE;
 
 pub mod backup;
 mod core_clocks;
@@ -1156,5 +1159,275 @@ impl Rcc {
             },
             rb: self.rb,
         }
+    }
+}
+
+macro_rules! pllck_getter {
+    ($($pllck_getter_name:ident: [ $pllon:ident, $plldivxen:ident, $plldivr:ident, $plldivm:ident, $plldivn:ident, $plldivy:ident],)+) => {
+        $(
+            fn $pllck_getter_name(&self) -> Option<Hertz> {
+                if self.rb.cr().read().$pllon().is_off() {
+                    return None;
+                }
+
+                if self.rb.pllcfgr().read().$plldivxen().is_disabled() {
+                    return None;
+                }
+
+                let srcck = match self.rb.pllckselr().read().pllsrc().variant() {
+                    PLLSRC::Hsi => HSI,
+                    PLLSRC::Csi => CSI,
+                    PLLSRC::Hse => { panic!("HSE oscilator clock is not specified"); },
+                    PLLSRC::None => { return None; }
+                };
+
+                let divn = (self.rb.$plldivr().read().$plldivn().bits() + 1) as u32;
+                let divy = (self.rb.$plldivr().read().$plldivy().bits() + 1) as u32;
+                let divm = match self.rb.pllckselr().read().$plldivm().bits() {
+                    0 =>  { return None; },
+                    n => n as u32
+                };
+                let refx_ck = srcck/divm;
+                let vocx_ck = refx_ck*divn;
+                let out_ck = vocx_ck/divy;
+                Some(Hertz::from_raw(out_ck))
+            }
+        )+
+    };
+}
+
+macro_rules! pclk_getter {
+    ($(($pclk:ident,$ppre:ident) : ( $self:ident, $hclk:ident, $var_type:ty, $cfgr:ident, $pprer:ident),)+) => {
+        $(
+            let ($pclk, $ppre) = {
+                let ppre = match $self.rb.$cfgr().read().$pprer().variant() {
+                    Some(<$var_type>::Div16) => 16,
+                    Some(<$var_type>::Div8) => 8,
+                    Some(<$var_type>::Div4) => 4,
+                    Some(<$var_type>::Div2) => 2,
+                    Some(<$var_type>::Div1) => 1,
+                    _ => 1,
+                };
+                (Hertz::from_raw($hclk.raw()/ppre), ppre as u8)
+            };
+        )+
+    };
+}
+
+impl Rcc {
+
+    pllck_getter! {
+        get_pll1_p_ck: [ pll1on, divp1en, pll1divr, divm1, divn1, divp1 ],
+        get_pll1_q_ck: [ pll1on, divq1en, pll1divr, divm1, divn1, divq1 ],
+        get_pll1_r_ck: [ pll1on, divr1en, pll1divr, divm1, divn1, divr1 ],
+        get_pll2_p_ck: [ pll2on, divp2en, pll2divr, divm2, divn2, divp2 ],
+        get_pll2_q_ck: [ pll2on, divq2en, pll2divr, divm2, divn2, divq2 ],
+        get_pll2_r_ck: [ pll2on, divr2en, pll2divr, divm2, divn2, divr2 ],
+        get_pll3_p_ck: [ pll3on, divp3en, pll3divr, divm3, divn3, divp3 ],
+        get_pll3_q_ck: [ pll3on, divq3en, pll3divr, divm3, divn3, divq3 ],
+        get_pll3_r_ck: [ pll3on, divr3en, pll3divr, divm3, divn3, divr3 ],
+    }
+
+    #[doc="CoreClocks is constructed from current rcc registers"]
+    pub fn get_frozen_core_clocks(&self) -> Option<CoreClocks> {
+        let pll1_p_ck = self.get_pll1_p_ck();
+        let pll1_q_ck = self.get_pll1_q_ck();
+        let pll1_r_ck = self.get_pll1_r_ck();
+        let pll2_p_ck = self.get_pll2_p_ck();
+        let pll2_q_ck = self.get_pll2_q_ck();
+        let pll2_r_ck = self.get_pll2_r_ck();
+        let pll3_p_ck = self.get_pll3_p_ck();
+        let pll3_q_ck = self.get_pll3_q_ck();
+        let pll3_r_ck = self.get_pll3_r_ck();
+
+        let hse_ck:Option<Hertz> = if self.rb.cr().read().hseon().is_on() {
+            panic!("HSE oscilator clock is not specified");
+        } else {
+            None
+        };
+
+        let sys_ck = match self.rb.cfgr().read().sws().variant() {
+            Some(SWS::Hsi) => Hertz::from_raw(HSI),
+            Some(SWS::Csi) => Hertz::from_raw(CSI),
+            Some(SWS::Hse) => if let Some(ck) = hse_ck {
+                ck
+            } else {
+                panic!("system clock is selected as HSE oscilator, but HSE clock is not enable");
+            },
+            Some(SWS::Pll1) => if let Some(ck) = pll1_p_ck {
+                ck
+            } else {
+                panic!("system clock is selected as pll1_p_ck, but pll1_p_ck is not enable");
+            },
+            None => { panic!("system clock is not selected"); },
+        };
+
+        let d1cpre_div = match self.rb.d1cfgr().read().d1cpre().variant() {
+            Some(D1CPRE::Div512) => 512,
+            Some(D1CPRE::Div256) => 256,
+            Some(D1CPRE::Div128) => 128,
+            Some(D1CPRE::Div64) => 64,
+            Some(D1CPRE::Div16) => 16,
+            Some(D1CPRE::Div8) => 8,
+            Some(D1CPRE::Div4) => 4,
+            Some(D1CPRE::Div2) => 2,
+            _ => 1
+        };
+        let sys_d1cpre_ck = Hertz::from_raw(sys_ck.raw()/d1cpre_div);
+        let hpre_div = match self.rb.d1cfgr().read().hpre().variant() {
+            Some(HPRE::Div512) => 512,
+            Some(HPRE::Div256) => 256,
+            Some(HPRE::Div128) => 128,
+            Some(HPRE::Div64) => 64,
+            Some(HPRE::Div16) => 16,
+            Some(HPRE::Div8) => 8,
+            Some(HPRE::Div4) => 4,
+            Some(HPRE::Div2) => 2,
+            _ => 1
+        };
+        let hclk = Hertz::from_raw(sys_d1cpre_ck.raw()/hpre_div);
+
+        pclk_getter! {
+            (rcc_pclk1, ppre1) : (self, hclk, D2PPRE1, d2cfgr, d2ppre1),
+            (rcc_pclk2, ppre2) : (self, hclk, D2PPRE2, d2cfgr, d2ppre2),
+            (rcc_pclk3, ppre3) : (self, hclk, D1PPRE, d1cfgr, d1ppre),
+            (rcc_pclk4, ppre4) : (self, hclk, D3PPRE, d3cfgr, d3ppre),
+        };
+
+        let per_ck = match self.rb.d1ccipr().read().ckpersel().variant() {
+            Some(CKPERSEL::Hsi) => Some(Hertz::from_raw(HSI)),
+            Some(CKPERSEL::Csi) => Some(Hertz::from_raw(CSI)),
+            Some(CKPERSEL::Hse) => if let Some(ck) = hse_ck {
+                Some(ck)
+            } else {
+                panic!("peripheral clock is selected as HSE, but HSE is not enable");
+            },
+            None => None
+        };
+
+        let lse_clk:Option<Hertz> = if self.rb.bdcr().read().lseon().is_on() {
+            panic!("LSE oscilator clock is not specified");
+        } else {
+            None
+        };
+        let mco1_ck = {
+            let pre_div = self.rb.cfgr().read().mco1pre().bits() as u32;
+            if pre_div == 0 {
+                None
+            } else {
+                match self.rb.cfgr().read().mco1().variant() {
+                    Some(MCO1::Hsi) => Some(Hertz::from_raw(HSI/pre_div)),
+                    Some(MCO1::Lse) => if let Some(ck) = lse_clk {
+                        Some(Hertz::from_raw(ck.raw()/pre_div))
+                    } else {
+                        panic!("mco1 src clock is selected as LSE, but LSE is not enable");
+                    },
+                    Some(MCO1::Hse) => if let Some(ck) = lse_clk {
+                        Some(Hertz::from_raw(ck.raw()/pre_div))
+                    } else {
+                        panic!("mco1 src clock is selected as LSE, but LSE is not enable");
+                    },
+                    Some(MCO1::Pll1Q) => if let Some(ck) = pll1_q_ck {
+                        Some(Hertz::from_raw(ck.raw()/pre_div))
+                    } else {
+                        panic!("mco1 src clock is selected as pll1_q_ck, but pll1_q_ck is not enable");
+                    },
+                    Some(MCO1::Hsi48) => Some(Hertz::from_raw(HSI48/pre_div)),
+                    None => unreachable!()
+                }
+            }
+        };
+        let mco2_ck = {
+            let pre_div = self.rb.cfgr().read().mco2pre().bits() as u32;
+            if pre_div == 0 {
+                None
+            } else {
+                match self.rb.cfgr().read().mco2().variant() {
+                    Some(MCO2::Sysclk) => Some(Hertz::from_raw(sys_ck.raw()/pre_div)),
+                    Some(MCO2::Pll2P) => if let Some(ck) = pll2_p_ck {
+                        Some(Hertz::from_raw(ck.raw()/pre_div))
+                    } else {
+                        panic!("mco2 src clock is selected as pll2_p_ck, but pll2_p_ck is not enable");
+                    },
+                    Some(MCO2::Hse) => if let Some(ck) = hse_ck {
+                        Some(ck)
+                    } else {
+                        panic!("mco2 src clock is selected as hse, but hse is not enable");
+                    },
+                    Some(MCO2::Pll1P) => if let Some(ck) = pll1_p_ck {
+                        Some(Hertz::from_raw(ck.raw()/pre_div))
+                    } else {
+                        panic!("mco2 src clock is selected as pll1_p_ck, but pll1_p_ck is not enable");
+                    },
+                    Some(MCO2::Csi) => Some(Hertz::from_raw(CSI/pre_div)),
+                    Some(MCO2::Lsi) => Some(Hertz::from_raw(LSI/pre_div)),
+                    None => unreachable!()
+                }
+            }
+        };
+
+        let timx_ker_ck = {
+            let timper = self.rb.cfgr().read().timpre().bit();
+            match (ppre2, timper) {
+                (0b100, false) => hclk,
+                (0b101, false) => Hertz::from_raw(hclk.raw()/2),
+                (0b110, false) => Hertz::from_raw(hclk.raw()/4),
+                (0b111, false) => Hertz::from_raw(hclk.raw()/8),
+                (0b100, true) => hclk,
+                (0b101, true) => hclk,
+                (0b110, true) => Hertz::from_raw(hclk.raw()/2),
+                (0b111, true) => Hertz::from_raw(hclk.raw()/4),
+                (_,_) => hclk,
+            }
+        };
+
+        let timy_ker_ck = {
+            let timper = self.rb.cfgr().read().timpre().bit();
+            match (ppre3, timper) {
+                (0b100, false) => hclk,
+                (0b101, false) => Hertz::from_raw(hclk.raw()/2),
+                (0b110, false) => Hertz::from_raw(hclk.raw()/4),
+                (0b111, false) => Hertz::from_raw(hclk.raw()/8),
+                (0b100, true) => hclk,
+                (0b101, true) => hclk,
+                (0b110, true) => Hertz::from_raw(hclk.raw()/2),
+                (0b111, true) => Hertz::from_raw(hclk.raw()/4),
+                (_,_) => hclk,
+            }
+        };
+
+        let clocks = CoreClocks {
+            hclk,
+            pclk1: rcc_pclk1,
+            pclk2: rcc_pclk2,
+            pclk3: rcc_pclk3,
+            pclk4: rcc_pclk4,
+            ppre1,
+            ppre2,
+            ppre3,
+            ppre4,
+            csi_ck: Some(Hertz::from_raw(CSI)),
+            hsi_ck: Some(Hertz::from_raw(HSI)),
+            hsi48_ck: Some(Hertz::from_raw(HSI48)),
+            lsi_ck: Some(Hertz::from_raw(LSI)),
+            per_ck,
+            hse_ck,
+            mco1_ck,
+            mco2_ck,
+            pll1_p_ck,
+            pll1_q_ck,
+            pll1_r_ck,
+            pll2_p_ck,
+            pll2_q_ck,
+            pll2_r_ck,
+            pll3_p_ck,
+            pll3_q_ck,
+            pll3_r_ck,
+            timx_ker_ck,
+            timy_ker_ck,
+            sys_ck,
+            c_ck: sys_d1cpre_ck,
+        };
+        Some(clocks)
     }
 }
