@@ -137,6 +137,7 @@ macro_rules! peripheral_reset_and_enable_control {
                 $([ kernel $clk:ident: $pk:ident $(($Variant:ident))* $ccip:ident $clk_doc:expr ])*
                 $([ group clk: $pk_g:ident $( $(($Variant_g:ident))* $ccip_g:ident $clk_doc_g:expr )* ])*
                 $([ fixed clk: $clk_doc_f:expr ])*
+                $([ no_lowpower : $no_lowpower_meta:meta ])*
         ),*
     ];)+) => {
         paste::item! {
@@ -190,6 +191,9 @@ macro_rules! peripheral_reset_and_enable_control {
                         $(
                             [fixed clk: $clk_doc_f]
                         )*
+                        $(
+                            [no_lowpower : $no_lowpower_meta]
+                        )*
                     );
                 )*
             )+
@@ -214,6 +218,7 @@ macro_rules! peripheral_reset_and_enable_control_generator {
         $([ kernel $clk:ident: $pk:ident $(($Variant:ident))* $ccip:ident $clk_doc:expr ])*
         $([ group clk: $pk_g:ident $pk_g_lower:ident $( $(($Variant_g:ident))* $ccip_g:ident $clk_doc_g:expr )* ])*
         $([ fixed clk: $clk_doc_f:expr ])*
+        $([ no_lowpower : $no_lowpower_meta:meta])*
     ) => {
         paste::item! {
             #[doc = " Reset, Enable and Clock functionality for " $p]
@@ -276,6 +281,7 @@ macro_rules! peripheral_reset_and_enable_control_generator {
             pub struct $p {
                 pub(crate) _marker: PhantomData<*const ()>,
             }
+            $( #[ $no_lowpower_meta ])*
             $( #[ $pmeta ] )*
             impl $p {
                 /// Set Low Power Mode for peripheral
@@ -563,6 +569,7 @@ peripheral_reset_and_enable_control! {
     ];
     #[cfg(not(feature = "rm0455"))]
     AHB4, "" => [
+        Hsem [ no_lowpower: cfg(not(all())) ],
         (Auto) Crc,
         (Auto) Bdma,
         (Auto) Adc3 [group clk: Adc]
