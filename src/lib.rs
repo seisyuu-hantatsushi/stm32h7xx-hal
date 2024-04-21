@@ -221,6 +221,9 @@ pub mod usb_hs;
 #[cfg_attr(docsrs, doc(cfg(feature = "xspi")))]
 pub mod xspi;
 
+#[cfg(all(feature = "device-selected", feature = "rm0399"))]
+pub mod hsem;
+
 #[cfg(feature = "device-selected")]
 mod sealed {
     pub trait Sealed {}

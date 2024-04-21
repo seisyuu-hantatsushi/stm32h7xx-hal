@@ -42,4 +42,7 @@ pub use crate::timer::TimerExt as _stm32h7xx_hal_timer_TimerExt;
 #[cfg(feature = "xspi")]
 #[cfg_attr(docsrs, doc(cfg(feature = "xspi")))]
 pub use crate::xspi::XspiExt as _stm32h7xx_hal_xspi_XspiExt;
+#[cfg(feature = "rm0399")]
+pub use crate::hsem::HsemExt as _stm32h7xx_hal_hsem_HsemExt;
+
 pub use fugit::{ExtU32 as _, RateExtU32 as _};
