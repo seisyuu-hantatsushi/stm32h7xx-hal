@@ -556,3 +556,93 @@ impl Pwr {
         }
     }
 }
+
+// Domain Power Control method
+#[cfg(not(feature = "rm0455"))]
+#[derive(PartialEq)]
+pub enum StopModeEnterWith {
+    WaitForInterrupt,
+    WaitForEvent
+}
+
+#[cfg(not(feature = "rm0455"))]
+#[derive(PartialEq)]
+pub enum ReguratorStateInStopMode {
+    MainReguratorOn,
+    LowPowerRegurationOn
+}
+
+#[cfg(not(feature = "rm0455"))]
+impl Pwr {
+
+    const CPUID_CPU1:u8 = 0x03;
+    const CPUID_CPU2:u8 = 0x01;
+
+    #[cfg(feature="cm7")]
+    const CPUID:u8 = Self::CPUID_CPU1;
+    #[cfg(feature="cm4")]
+    const CPUID:u8 = Self::CPUID_CPU2;
+
+    #[doc="Clear pending event"]
+    pub fn clear_pending_event(&self) {
+        if Self::CPUID == Self::CPUID_CPU1 {
+            // CM7
+            cortex_m::asm::wfe();
+        }
+        else if Self::CPUID == Self::CPUID_CPU2 {
+            // CM4
+            cortex_m::asm::sev();
+            cortex_m::asm::wfe();
+        }
+        else {
+            unreachable!()
+        }
+    }
+
+    #[cfg(feature = "cm7")]
+    #[doc="D1 Domain enters StopMode"]
+    pub fn d1_domain_enters_stopmode(&self,
+                                     _cp: &mut cortex_m::Peripherals,
+                                     enter_with:StopModeEnterWith) {
+        if enter_with == StopModeEnterWith::WaitForEvent {
+        }
+        else {
+        }
+    }
+
+    #[cfg(feature = "cm4")]
+    #[doc="D2 Domain enters StopMode"]
+    pub fn d2_domain_enters_stopmode(&self,
+                                     cp: &mut cortex_m::Peripherals,
+                                     regurator_state: ReguratorStateInStopMode,
+                                     enter_with:StopModeEnterWith) {
+        /* Select the regulator state in Stop mode */
+        self.rb.cr1().modify(|_,w|
+                             if regurator_state == ReguratorStateInStopMode::MainReguratorOn {
+                                 w.lpds().clear_bit()
+                             }
+                             else {
+                                 w.lpds().set_bit()
+                             });
+
+        /* Keep DSTOP mode when D2 domain enters Deepsleep */
+        self.rb.cpu2cr().modify(|_,w| w.pdds_d2().clear_bit());
+
+        cp.SCB.set_sleepdeep();
+        #[cfg(feature = "log")]
+        log::debug!("set sleep deep");
+
+        // Ensure that all instructions are done before entering STOP mode
+        cortex_m::asm::dsb();
+        cortex_m::asm::isb();
+
+        if enter_with == StopModeEnterWith::WaitForEvent {
+            cortex_m::asm::wfe();
+        }
+        else {
+            cortex_m::asm::wfi();
+        }
+        cp.SCB.clear_sleepdeep();
+
+    }
+}
