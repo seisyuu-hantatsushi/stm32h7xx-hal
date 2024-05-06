@@ -201,6 +201,9 @@ pub trait RccExt {
     /// Constrains the `RCC` peripheral so it plays nicely with the
     /// other abstractions
     fn constrain(self) -> Rcc;
+
+    #[doc="Check D2 Domain Clock is available."]
+    fn is_d2_domain_available(&self) -> bool;
 }
 
 impl RccExt for RCC {
@@ -224,6 +227,10 @@ impl RccExt for RCC {
             },
             rb: self,
         }
+    }
+
+    fn is_d2_domain_available(&self) -> bool {
+        self.cr().read().d2ckrdy().bit()
     }
 }
 
@@ -268,7 +275,8 @@ pub struct Ccdr {
     //
     // TODO: Remove this once all permitted RCC register accesses
     // after freeze are enumerated in this struct
-    pub(crate) rb: RCC,
+    #[doc="Reset And Clock Control"]
+    pub rcc: RCC,
 }
 
 const HSI: u32 = 64_000_000; // Hz
@@ -981,7 +989,7 @@ impl Rcc {
         {
             debug!("--- RCC register settings");
 
-            let cfgr = rcc.cfgr.read();
+            let cfgr = rcc.cfgr().read();
             debug!(
                 "CFGR register: SWS (System Clock Mux)={:?}",
                 cfgr.sws().variant().unwrap()
@@ -989,7 +997,7 @@ impl Rcc {
 
             #[cfg(not(feature = "rm0455"))]
             {
-                let d1cfgr = rcc.d1cfgr.read();
+                let d1cfgr = rcc.d1cfgr().read();
                 debug!(
                     "D1CFGR register: D1CPRE={:?} HPRE={:?} D1PPRE={:?}",
                     d1cfgr.d1cpre().variant().unwrap(),
@@ -997,14 +1005,14 @@ impl Rcc {
                     d1cfgr.d1ppre().variant().unwrap(),
                 );
 
-                let d2cfgr = rcc.d2cfgr.read();
+                let d2cfgr = rcc.d2cfgr().read();
                 debug!(
                     "D2CFGR register: D2PPRE1={:?} D2PPRE1={:?}",
                     d2cfgr.d2ppre1().variant().unwrap(),
                     d2cfgr.d2ppre2().variant().unwrap(),
                 );
 
-                let d3cfgr = rcc.d3cfgr.read();
+                let d3cfgr = rcc.d3cfgr().read();
                 debug!(
                     "D3CFGR register: D3PPRE={:?}",
                     d3cfgr.d3ppre().variant().unwrap(),
@@ -1012,7 +1020,7 @@ impl Rcc {
             }
             #[cfg(feature = "rm0455")]
             {
-                let cdcfgr1 = rcc.cdcfgr1.read();
+                let cdcfgr1 = rcc.cdcfgr1().read();
                 debug!(
                     "CDCFGR1 register: CDCPRE={:?} HPRE={:?} CDPPRE={:?}",
                     cdcfgr1.cdcpre().variant().unwrap(),
@@ -1020,21 +1028,21 @@ impl Rcc {
                     cdcfgr1.cdppre().variant().unwrap(),
                 );
 
-                let cdcfgr2 = rcc.cdcfgr2.read();
+                let cdcfgr2 = rcc.cdcfgr2().read();
                 debug!(
                     "CDCFGR2 register: CDPPRE1={:?} CDPPRE1={:?}",
                     cdcfgr2.cdppre1().variant().unwrap(),
                     cdcfgr2.cdppre2().variant().unwrap(),
                 );
 
-                let srdcfgr = rcc.srdcfgr.read();
+                let srdcfgr = rcc.srdcfgr().read();
                 debug!(
                     "SRDCFGR register: SRDPPRE={:?}",
                     srdcfgr.srdppre().bits(),
                 );
             }
 
-            let pllckselr = rcc.pllckselr.read();
+            let pllckselr = rcc.pllckselr().read();
             debug!(
                 "PLLCKSELR register: PLLSRC={:?} DIVM1={:#x} DIVM2={:#x} DIVM3={:#x}",
                 pllckselr.pllsrc().variant(),
@@ -1043,7 +1051,7 @@ impl Rcc {
                 pllckselr.divm3().bits(),
             );
 
-            let pllcfgr = rcc.pllcfgr.read();
+            let pllcfgr = rcc.pllcfgr().read();
             debug!(
                 "PLLCKSELR register (PLL1): PLL1FRACEN={:?} PLL1VCOSEL={:?} PLL1RGE={:?} DIVP1EN={:?} DIVQ1EN={:?} DIVR1EN={:?}",
                 pllcfgr.pll1fracen().variant(),
@@ -1072,7 +1080,7 @@ impl Rcc {
                 pllcfgr.divr3en().variant(),
             );
 
-            let pll1divr = rcc.pll1divr.read();
+            let pll1divr = rcc.pll1divr().read();
             debug!(
                 "PLL1DIVR register: DIVN1={:#x} DIVP1={:#x} DIVQ1={:#x} DIVR1={:#x}",
                 pll1divr.divn1().bits(),
@@ -1081,13 +1089,13 @@ impl Rcc {
                 pll1divr.divr1().bits(),
             );
 
-            let pll1fracr = rcc.pll1fracr.read();
+            let pll1fracr = rcc.pll1fracr().read();
             debug!(
                 "PLL1FRACR register: FRACN1={:#x}",
                 pll1fracr.fracn1().bits(),
             );
 
-            let pll2divr = rcc.pll2divr.read();
+            let pll2divr = rcc.pll2divr().read();
             debug!(
                 "PLL2DIVR register: DIVN2={:#x} DIVP2={:#x} DIVQ2={:#x} DIVR2={:#x}",
                 pll2divr.divn2().bits(),
@@ -1096,13 +1104,13 @@ impl Rcc {
                 pll2divr.divr2().bits(),
             );
 
-            let pll2fracr = rcc.pll2fracr.read();
+            let pll2fracr = rcc.pll2fracr().read();
             debug!(
                 "PLL2FRACR register: FRACN2={:#x}",
                 pll2fracr.fracn2().bits(),
             );
 
-            let pll3divr = rcc.pll3divr.read();
+            let pll3divr = rcc.pll3divr().read();
             debug!(
                 "PLL3DIVR register: DIVN3={:#x} DIVP3={:#x} DIVQ3={:#x} DIVR3={:#x}",
                 pll3divr.divn3().bits(),
@@ -1111,7 +1119,7 @@ impl Rcc {
                 pll3divr.divr3().bits(),
             );
 
-            let pll3fracr = rcc.pll3fracr.read();
+            let pll3fracr = rcc.pll3fracr().read();
             debug!(
                 "PLL3FRACR register: FRACN3={:#x}",
                 pll3fracr.fracn3().bits(),
@@ -1157,7 +1165,7 @@ impl Rcc {
                 // we can safely create a singleton here
                 PeripheralREC::new_singleton()
             },
-            rb: self.rb,
+            rcc: self.rb,
         }
     }
 }
@@ -1429,5 +1437,23 @@ impl Rcc {
             c_ck: sys_d1cpre_ck,
         };
         Some(clocks)
+    }
+}
+
+impl Rcc {
+
+    #[doc="Check HSEM is enable."]
+    pub fn is_hsem_enable(&self) -> bool {
+        self.rb.ahb4enr().read().hsemen().bit()
+    }
+
+    #[doc="Check D1 Domain Clock is available."]
+    pub fn is_d1_domain_available(&self) -> bool {
+        self.rb.cr().read().d1ckrdy().bit()
+    }
+
+    #[doc="Check D2 Domain Clock is available."]
+    pub fn is_d2_domain_available(&self) -> bool {
+        self.rb.cr().read().d2ckrdy().bit()
     }
 }

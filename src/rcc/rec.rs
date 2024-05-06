@@ -126,6 +126,12 @@ impl Rcc {
     }
 }
 
+#[doc="Returns all the peripherals resets / enables / kernel clocks"]
+pub unsafe fn steal_peripheral_rec() -> PeripheralREC {
+    PeripheralREC::new_singleton()
+}
+
+
 // This macro uses the paste::item! macro to create identifiers.
 //
 // https://crates.io/crates/paste
