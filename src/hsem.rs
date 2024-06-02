@@ -13,10 +13,16 @@ const CPUID:u8 = CPUID_CPU2;
 
 const LOCK_BIT:u32 = 0x01 << 31;
 
+const ERROR_MSGS:[&str;3] = [
+    "this samephore has already been taken.",
+    "permission of semaphore operation has already been moved.",
+    "permission of interrupt operation has already been moved."
+];
+
 macro_rules! hsem_define {
     [$($name:ident : $n:literal),+] => {
         pub struct Hsem {
-            $($name: Sema<$n>,)+
+            $($name: Option<Sema<$n>>,)+
         }
     };
 }
@@ -24,7 +30,7 @@ macro_rules! hsem_define {
 macro_rules! hsem_init {
     [$($name:ident : $n:literal),+] => {
         Hsem {
-            $($name : Sema::<$n>{},)+
+            $($name : Some(Sema::<$n>{ op: Some(SemaOp::<$n>{}), intr: Some(SemaIntr::<$n>{}) }),)+
         }
     }
 }
@@ -32,17 +38,30 @@ macro_rules! hsem_init {
 macro_rules! hsem_fn_sema {
     [$($name:ident : $n:literal),+] => {
         $(
-            pub fn $name(&self) -> Sema<$n> {
-                self.$name
+            pub fn $name(&mut self) -> Sema<$n> {
+                if let Some(sema) = self.$name.take() {
+                    sema
+                }
+                else {
+                    panic!("this samephore has already been taken.");
+                }
             }
         )+
     }
 }
 
-#[derive(Clone,Copy)]
-pub struct Sema<const N:usize> {}
+pub struct SemaOp<const N:usize> {
+}
 
-impl<const N:usize> Sema<N> {
+pub struct SemaIntr<const N:usize> {
+}
+
+pub struct Sema<const N:usize> {
+    op: Option<SemaOp<N>>,
+    intr: Option<SemaIntr<N>>,
+}
+
+impl<const N:usize> SemaIntr<N> {
 
     pub fn enable_irq(&mut self) {
         let rb_ptr = crate::pac::HSEM::ptr();
@@ -96,6 +115,9 @@ impl<const N:usize> Sema<N> {
             _ => unreachable!()
         }
     }
+}
+
+impl<const N:usize> SemaOp <N> {
 
     pub fn take(&mut self, proc_id: u8) -> bool {
         let rb_ptr = crate::pac::HSEM::ptr();
@@ -120,6 +142,88 @@ impl<const N:usize> Sema<N> {
         let rb_ptr = crate::pac::HSEM::ptr();
         let r:u32 = ((CPUID as u32) << 8) | (proc_id as u32);
         unsafe { (*rb_ptr).r(N).write(|w| { w.bits(r) }) };
+    }
+
+}
+
+impl<const N:usize> Sema<N> {
+
+    pub fn split(&mut self) -> (SemaOp<N>, SemaIntr<N>) {
+        let intr = if let Some(intr) = self.intr.take() {
+            intr
+        } else {
+            panic!("{}",ERROR_MSGS[2]);
+        };
+
+        let op = if let Some(op) = self.op.take() {
+            op
+        } else {
+            panic!("{}",ERROR_MSGS[1]);
+        };
+        (op, intr)
+    }
+
+    pub fn enable_irq(&mut self) {
+        if let Some(ref mut intr) = self.intr {
+            intr.enable_irq()
+        }
+        else {
+            panic!("{}",ERROR_MSGS[2]);
+        }
+    }
+
+    pub fn disable_irq(&mut self) {
+        if let Some(ref mut intr) = self.intr {
+            intr.disable_irq()
+        }
+        else {
+            panic!("{}",ERROR_MSGS[2]);
+        }
+    }
+
+    pub fn status_irq(&mut self) -> bool {
+        if let Some(ref mut intr) = self.intr {
+            intr.status_irq()
+        }
+        else {
+            panic!("{}",ERROR_MSGS[2]);
+        }
+    }
+
+    pub fn clear_irq(&mut self){
+        if let Some(ref mut intr) = self.intr {
+            intr.clear_irq()
+        }
+        else {
+            panic!("{}",ERROR_MSGS[2]);
+        }
+    }
+
+    pub fn take(&mut self, proc_id: u8) -> bool {
+        if let Some(ref mut op) = self.op {
+            op.take(proc_id)
+        }
+        else {
+            panic!("{}",ERROR_MSGS[1]);
+        }
+    }
+
+    pub fn fast_take(&mut self) -> bool {
+        if let Some(ref mut op) = self.op {
+            op.fast_take()
+        }
+        else {
+            panic!("{}",ERROR_MSGS[1]);
+        }
+    }
+
+    pub fn release(&mut self, proc_id: u8) {
+        if let Some(ref mut op) = self.op {
+            op.release(proc_id)
+        }
+        else {
+            panic!("{}",ERROR_MSGS[1]);
+        }
     }
 }
 
