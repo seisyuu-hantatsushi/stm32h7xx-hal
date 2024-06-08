@@ -25,7 +25,7 @@ static mut EP_MEMORY_2: MaybeUninit<[u32; 1024]> = MaybeUninit::uninit();
 
 #[entry]
 fn main() -> ! {
-    let dp = stm32::Peripherals::take().unwrap();
+    let dp = unsafe { stm32::Peripherals::steal() };
 
     // Power
     let pwr = dp.PWR.constrain();

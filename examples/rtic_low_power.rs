@@ -57,7 +57,7 @@ mod app {
 
         // Run D3 / SRD domain
         #[cfg(not(feature = "rm0455"))]
-        ctx.device.PWR.cpucr().modify(|_, w| w.run_d3().set_bit());
+        ctx.device.PWR.cpu1cr().modify(|_, w| w.run_d3().set_bit());
         #[cfg(feature = "rm0455")] // 7b3/7a3/7b0 parts
         ctx.device.PWR.cpucr.modify(|_, w| w.run_srd().set_bit());
 
